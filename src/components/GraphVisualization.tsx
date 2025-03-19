@@ -75,15 +75,48 @@ const ForceGraph2D = dynamic(() => import("force-graph").then(mod => {
         .height(height)
         .nodeLabel("label")
         .nodeColor(n => n.color || "#1e88e5")
-        // Make links extremely visible
-        .linkDirectionalArrowLength(15) // Larger arrows
+        // Clear hierarchical tree-style links
+        .linkDirectionalArrowLength(20) // Larger arrows for hierarchy
         .linkDirectionalArrowRelPos(1)
-        .linkWidth(10) // Extremely thick links for maximum visibility
+        .linkWidth(link => {
+          // Thicker links for parent-child relationships
+          const sourceY = typeof link.source === 'object' ? link.source.y : 0;
+          const targetY = typeof link.target === 'object' ? link.target.y : 0;
+          return Math.abs(targetY - sourceY) > 150 ? 4 : 1; // Thicker for vertical links
+        })
         .linkLabel("label")
-        .linkColor(() => "#ff0000") // Pure red for maximum visibility
-        .linkCurvature(0.2) // Gentle curves
-        // Make links solid rather than dashed for better visibility
-        .linkLineDash(() => null) // Solid lines are more visible
+        .linkColor(link => {
+          // Check vertical positioning
+          const sourceY = typeof link.source === 'object' ? link.source.y : 0;
+          const targetY = typeof link.source === 'object' ? link.target.y : 0;
+          
+          // Different colors based on relationship type
+          if (Math.abs(targetY - sourceY) > 150) {
+            // Vertical parent-child links (dark blue)
+            return "#0047AB"; 
+          } else {
+            // Horizontal sibling links (light gray)
+            return "#CCCCCC";
+          }
+        })
+        .linkCurvature(link => {
+          // Straight lines for parent-child, curved for siblings
+          const sourceY = typeof link.source === 'object' ? link.source.y : 0;
+          const targetY = typeof link.target === 'object' ? link.target.y : 0;
+          
+          // If significant vertical difference, it's a tree relationship: straight line
+          // Otherwise it's a sibling relationship: use curve
+          return Math.abs(targetY - sourceY) > 150 ? 0 : 0.3;
+        })
+        // Use dashed lines for sibling relationships
+        .linkLineDash(link => {
+          const sourceY = typeof link.source === 'object' ? link.source.y : 0;
+          const targetY = typeof link.target === 'object' ? link.target.y : 0;
+          
+          // Solid lines for vertical parent-child links
+          // Dashed lines for horizontal sibling links
+          return Math.abs(targetY - sourceY) > 150 ? null : [5, 5];
+        })
         .linkCanvasObjectMode(() => "after")
         .linkCanvasObject((link, ctx) => {
           // Log only once using the global variable
@@ -152,13 +185,25 @@ const ForceGraph2D = dynamic(() => import("force-graph").then(mod => {
         .onNodeClick(rest.onNodeClick)
         .cooldownTicks(200) // Longer cooldown for better stabilization
         .d3AlphaDecay(0.01) // Slower decay for more movement
-        .d3VelocityDecay(0.05) // Lower decay for more sustained movement
-        // Extremely strong repulsive forces for maximum node separation
-        .d3Force('charge', d3.forceManyBody().strength(-1500))
-        // Increase link distance for better spacing
-        .d3Force('link', d3.forceLink().distance(300).strength(0.8))
-        // Center the graph in view
-        .d3Force('center', d3.forceCenter())
+        .d3VelocityDecay(0.2) // Moderate decay for controlled movement
+        // STRICT tree layout forces
+        // Very strong downward force - essential for tree layout
+        .d3Force('charge', null) // Remove charge force that causes radial layout
+        // Very long link distance for clear tree structure
+        .d3Force('link', d3.forceLink().distance(250).strength(1))
+        // No center force - use individual node positioning instead
+        .d3Force('center', null)
+        // Large collision radius to keep nodes well separated
+        .d3Force('collision', d3.forceCollide(80))
+        // Vertical forces for tree layout
+        .d3Force('y', d3.forceY(node => {
+          // Allow any node type, but maintain hierarchy
+          return 300; // Default position, will be overridden by node.fy for fixed positions
+        }).strength(0.1))
+        // Horizontal distribution
+        .d3Force('x', d3.forceX(node => {
+          return width / 2; // Center by default, will be overridden by node.fx for fixed positions
+        }).strength(0.1))
         // Add a custom tick function to debug positions
         .onEngineTick(() => {
           if (!linkDebugLogged) {
@@ -178,8 +223,16 @@ const ForceGraph2D = dynamic(() => import("force-graph").then(mod => {
         // Add hover interaction for nodes
         .onNodeHover(node => {
           if (containerRef.current) {
-            containerRef.current.style.cursor = node ? 'pointer' : 'default';
+            containerRef.current.style.cursor = node ? 'grab' : 'default';
           }
+        })
+        // Enable node dragging for manual layout
+        .nodeRelSize(12) // Collision detection area for dragging
+        .enableNodeDrag(true) // Allow nodes to be dragged
+        .onNodeDragEnd(node => {
+          // Pin the node in place after dragging
+          node.fx = node.x;
+          node.fy = node.y;
         })
         .nodeCanvasObject((node, ctx, globalScale) => {
           const label = node.label || "";
@@ -188,22 +241,51 @@ const ForceGraph2D = dynamic(() => import("force-graph").then(mod => {
           const textWidth = ctx.measureText(label).width;
           const bgDimensions = [textWidth, fontSize].map(n => n + 10/globalScale); // More padding
 
-          // Node circle - extremely large size for better visibility and clickability
-          const nodeSize = 30; // Extremely large node size for easy clicking
+          // Node size varies by node type - root nodes are larger
+          // Calculate size based on type - root nodes are larger
+          const isRootNode = node.type === 'Root Category' || 
+                            node.type === 'Category' || 
+                            node.label?.toLowerCase().includes('root');
+          const nodeSize = isRootNode ? 35 : 30; // Larger size for root nodes
           ctx.beginPath();
           ctx.arc(node.x || 0, node.y || 0, nodeSize, 0, 2 * Math.PI);
           ctx.fillStyle = node.color || "#1e88e5";
           ctx.fill();
           
-          // Add thick white border for contrast
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          
-          // Add second border for emphasis
-          ctx.strokeStyle = node.color || "#1e88e5";
-          ctx.lineWidth = 1;
-          ctx.stroke();
+          // Add special border styling based on node type
+          if (isRootNode) {
+            // Silver-white thick border for root nodes - makes them stand out
+            ctx.strokeStyle = "#FFFFFF"; // Pure white
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            
+            // Second border with a black outline for high contrast
+            ctx.strokeStyle = "#000000"; // Black
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          } else if (node.type === 'Subcategory' || node.type === 'Sub Category') {
+            // Dashed border for subcategories
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Apply a distinct pattern
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]); // Dashed effect
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash
+          } else {
+            // Standard border for regular nodes
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Add second border for emphasis
+            ctx.strokeStyle = node.color || "#1e88e5";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
 
           // Always show labels for better visibility
           // Get vertical offset based on node size
@@ -267,8 +349,67 @@ const ForceGraph2D = dynamic(() => import("force-graph").then(mod => {
         rest.onRef(graph);
       }
       
-      // Auto-fit on first render
-      setTimeout(() => graph.zoomToFit(400, 40), 500);
+      // Initialize layout for Category nodes in a grid pattern
+      const initializeTreeLayout = () => {
+        // Get current data - looking for Category nodes only
+        const data = graph.graphData();
+        
+        // Generic approach to identify Category nodes
+        const categoryNodes = data.nodes.filter(node => 
+          // Check if node has Category type
+          node.type === 'Category' ||
+          // Check if node has Category in properties
+          (node.properties && node.properties.category === true)
+        );
+        
+        // If we found none, just use all nodes (fallback)
+        if (categoryNodes.length === 0) {
+          console.log("No Category nodes found, using all available nodes");
+          return;
+        }
+        
+        console.log(`Found ${categoryNodes.length} Category nodes for initial display`);
+        
+        if (categoryNodes.length === 0) return;
+        
+        // Arrange category nodes in a grid layout
+        const gridColumns = Math.min(4, Math.ceil(Math.sqrt(categoryNodes.length)));
+        const gridRows = Math.ceil(categoryNodes.length / gridColumns);
+        
+        // Calculate spacing
+        const horizontalSpacing = width / (gridColumns + 1);
+        const verticalSpacing = height / (gridRows + 1);
+        
+        // Position each category node in a grid
+        categoryNodes.forEach((node, i) => {
+          const col = i % gridColumns;
+          const row = Math.floor(i / gridColumns);
+          
+          // Fix position in grid layout
+          node.fx = horizontalSpacing * (col + 1);
+          node.fy = verticalSpacing * (row + 1);
+          
+          // Mark as a Category node
+          node.type = 'Category';
+        });
+        
+        // Update the graph with modified data
+        graph.graphData(data);
+        
+        // Fit to view all nodes
+        graph.zoomToFit(500, 50);
+        
+        // Apply a moderate zoom level
+        setTimeout(() => {
+          const currentZoom = graph.zoom();
+          if (currentZoom < 0.8) {
+            graph.zoom(1.2, 500);
+          }
+        }, 600);
+      };
+      
+      // Run tree layout initialization after a short delay
+      setTimeout(initializeTreeLayout, 500);
       
       return () => {
         graph._destructor && graph._destructor();
@@ -303,6 +444,17 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
         links: graphData.links.length,
         linkSample: graphData.links.slice(0, 3)
       });
+      
+      // Log node types for debugging
+      const nodeTypes = new Set();
+      graphData.nodes.forEach(node => {
+        if (node.type) nodeTypes.add(node.type);
+      });
+      console.log("Node types present:", Array.from(nodeTypes));
+      
+      // Count Category nodes
+      const categoryCount = graphData.nodes.filter(n => n.type === 'Category').length;
+      console.log(`Found ${categoryCount} nodes with type='Category'`);
     }
   }, [graphData]);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -371,7 +523,74 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
         
         if (expandedData && expandedData.nodes.length > 0) {
           console.log(`Adding ${expandedData.nodes.length} nodes and ${expandedData.links.length} links from expansion`);
+          
+          // Before adding nodes, position them in a tree layout underneath the parent
+          const parentX = node.x || 0;
+          const parentY = node.y || 0;
+          
+          // Position child nodes directly below parent in a strict tree structure
+          expandedData.nodes.forEach((childNode, i) => {
+            // If this is a new node (not already in the graph), position it
+            if (!graphRef.current.graphData().nodes.find(n => n.id === childNode.id)) {
+              // Calculate position - strictly in a horizontal row under the parent
+              const totalChildren = expandedData.nodes.length;
+              const childSpacing = totalChildren <= 3 ? 150 : 100; // More space if fewer children
+              const rowWidth = childSpacing * (totalChildren - 1);
+              const startX = parentX - (rowWidth / 2);
+              
+              // Position child in a row under parent
+              childNode.x = startX + (i * childSpacing);
+              childNode.y = parentY + 300; // Fixed distance below parent
+              
+              // Mark this node as a sub-category
+              if (!childNode.type) {
+                childNode.type = 'Subcategory';
+              }
+            }
+          });
+          
+          // Add nodes to the graph
           addNodesToGraph(expandedData);
+          
+          // After adding new nodes, arrange them in tree layout
+          setTimeout(() => {
+            if (graphRef.current) {
+              // Get the current graph data
+              const currentData = graphRef.current.graphData();
+              
+              // Find newly added nodes (children of the expanded node)
+              const childNodes = currentData.nodes.filter(n => 
+                expandedData.nodes.some(newNode => newNode.id === n.id)
+              );
+              
+              // Position children in a clear row below parent, FIXED positions
+              const totalChildren = childNodes.length;
+              const childSpacing = totalChildren <= 3 ? 150 : 100; // More space if fewer children
+              const rowWidth = childSpacing * (totalChildren - 1);
+              const startX = parentX - (rowWidth / 2);
+              
+              // Position each child with fixed coordinates
+              childNodes.forEach((childNode, i) => {
+                // Fix position to enforce strict tree layout
+                childNode.fx = startX + (i * childSpacing); // Fixed X
+                childNode.fy = parentY + 300; // Fixed Y, much lower than parent
+                
+                // Mark child nodes with type if not already set
+                if (!childNode.type) {
+                  childNode.type = 'Subcategory';
+                }
+              });
+              
+              // Update the graph with the modified data
+              graphRef.current.graphData(currentData);
+              
+              // Center on the parent node and fit all nodes
+              graphRef.current.centerAt(parentX, parentY, 1000);
+              setTimeout(() => {
+                graphRef.current.zoomToFit(500, 60);
+              }, 1200);
+            }
+          }, 100);
         } else {
           console.log("No additional connections found for node:", node.id);
         }
@@ -412,6 +631,137 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
     }
   };
   
+  // Reset the physics simulation and node positions, maintaining tree structure
+  const resetLayout = () => {
+    if (graphRef.current) {
+      const graphData = graphRef.current.graphData();
+      
+      // Generic approach to identify Category nodes
+      const categoryNodes = graphData.nodes.filter(node => 
+        // Check if node has Category type
+        node.type === 'Category' ||
+        // Check if node has Category in properties
+        (node.properties && node.properties.category === true)
+      );
+      
+      // If we found none, just use some other fallback
+      if (categoryNodes.length === 0) {
+        console.log("No Category nodes found in resetLayout, checking for subcategories");
+        // Try to use subcategories as a fallback
+        const fallbackNodes = graphData.nodes.filter(node => 
+          node.type === 'Subcategory' || 
+          (node.label && node.label.includes('Sub'))
+        );
+        
+        // If still nothing, just use any nodes
+        if (fallbackNodes.length > 0) {
+          console.log(`Using ${fallbackNodes.length} subcategory nodes as fallback`);
+          return;
+        }
+      }
+      
+      // Create a node map to find children
+      const nodeMap = new Map();
+      graphData.nodes.forEach(node => nodeMap.set(node.id, node));
+      
+      // Create a map of parent -> children relationships
+      const childrenMap = new Map();
+      graphData.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        
+        // We need to determine which is parent and which is child
+        // In a tree hierarchy, we assume source is parent and target is child
+        if (!childrenMap.has(sourceId)) {
+          childrenMap.set(sourceId, []);
+        }
+        childrenMap.get(sourceId).push(targetId);
+      });
+      
+      // First clear all fixed positions
+      graphData.nodes.forEach(node => {
+        delete node.fx;
+        delete node.fy;
+      });
+      
+      // Position category nodes in a grid layout
+      const gridColumns = Math.min(4, Math.ceil(Math.sqrt(categoryNodes.length)));
+      const gridRows = Math.ceil(categoryNodes.length / gridColumns);
+      
+      // Calculate spacing
+      const horizontalSpacing = dimensions.width / (gridColumns + 1);
+      const verticalSpacing = Math.min(300, dimensions.height / (gridRows + 1));
+      
+      // Position each category node in a grid
+      categoryNodes.forEach((node, i) => {
+        const col = i % gridColumns;
+        const row = Math.floor(i / gridColumns);
+        
+        // Fix position in grid layout
+        node.fx = horizontalSpacing * (col + 1);
+        node.fy = verticalSpacing * (row + 1);
+      });
+      
+      // Function to position children recursively in a tree
+      const positionChildren = (parentId, level = 1, horizontalOffset = 0) => {
+        const children = childrenMap.get(parentId) || [];
+        const parent = nodeMap.get(parentId);
+        
+        if (!parent || children.length === 0) return;
+        
+        const parentX = parent.fx || parent.x || 0;
+        const parentY = parent.fy || parent.y || 0;
+        
+        // Calculate width needed for all children
+        const childSpacing = 120;
+        const totalWidth = (children.length - 1) * childSpacing;
+        
+        // Position each child
+        children.forEach((childId, i) => {
+          const child = nodeMap.get(childId);
+          if (!child) return;
+          
+          // Position child in tree layout under parent
+          const xPosition = parentX + ((i - (children.length - 1) / 2) * childSpacing) + horizontalOffset;
+          const yPosition = parentY + 200;
+          
+          child.fx = xPosition;
+          child.fy = yPosition;
+          
+          // Recursively position this child's children
+          positionChildren(childId, level + 1, xPosition - parentX);
+        });
+      };
+      
+      // Position all nodes starting from category nodes
+      categoryNodes.forEach(category => {
+        positionChildren(category.id);
+      });
+      
+      // Update the graph with the tree-structured layout
+      graphRef.current.graphData(graphData);
+      
+      // Restart simulation with new positions
+      if (typeof graphRef.current.resetSimulation === 'function') {
+        graphRef.current.resetSimulation();
+      } else if (typeof graphRef.current.restartSimulation === 'function') {
+        graphRef.current.restartSimulation();
+      } else {
+        // Force a refresh through zoom
+        const currentZoom = graphRef.current.zoom();
+        graphRef.current.zoom(currentZoom * 1.01, 10);
+        setTimeout(() => graphRef.current.zoom(currentZoom, 300), 50);
+      }
+      
+      // Fit all nodes to view
+      setTimeout(() => {
+        if (graphRef.current) {
+          graphRef.current.zoomToFit(500, 60);
+        }
+      }, 1000);
+    }
+  };
+  
   // Add a debug function
   const inspectGraph = () => {
     if (graphRef.current) {
@@ -436,8 +786,11 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
   return (
     <div className="w-full h-full relative" ref={containerRef}>
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
-        <div className="bg-background/80 backdrop-blur-sm p-1 rounded border shadow-sm">
-          <div className="flex gap-1 mb-1">
+        <div className="bg-background/80 backdrop-blur-sm p-2 rounded-md border shadow-md">
+          <p className="text-xs font-semibold mb-2 text-center">Tree Hierarchy View</p>
+          
+          {/* Zoom controls */}
+          <div className="flex gap-1 mb-2">
             <Button size="icon" variant="outline" onClick={zoomIn} title="Zoom In">
               <ZoomIn className="h-4 w-4" />
             </Button>
@@ -445,25 +798,41 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
               <ZoomOut className="h-4 w-4" />
             </Button>
           </div>
-          <Button size="icon" variant="outline" onClick={resetView} className="w-full" title="Fit Graph">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
           
-          <Button size="icon" variant="outline" onClick={inspectGraph} className="w-full mt-1" title="Debug Graph">
+          {/* Layout controls */}
+          <div className="space-y-2">
+            <Button size="sm" variant="outline" onClick={resetView} className="w-full flex items-center justify-center gap-2" title="Fit All Nodes">
+              <RefreshCw className="h-4 w-4" />
+              <span className="text-xs">Fit to View</span>
+            </Button>
+            
+            <Button size="sm" variant="default" onClick={resetLayout} className="w-full flex items-center justify-center gap-2" title="Apply Tree Layout">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+              </svg>
+              <span className="text-xs">Tree Layout</span>
+            </Button>
+          </div>
+          
+          {/* Debug button - hidden in production */}
+          <Button size="icon" variant="outline" onClick={inspectGraph} className="w-full mt-2" title="Debug Graph">
             <span className="font-mono">🔍</span>
           </Button>
         </div>
       </div>
       
       <div className="absolute bottom-2 left-2 z-10">
-        <div className="bg-background/80 backdrop-blur-sm p-3 rounded-md border border-blue-300 shadow-sm text-sm">
+        <div className="bg-background/80 backdrop-blur-sm p-3 rounded-md border border-blue-300 shadow-md text-sm">
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">i</span>
             <div>
-              <p className="font-medium text-foreground">Expand the Graph</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                <span className="font-bold">Click any node</span> to select it, then <span className="font-bold">click again</span> to expand and explore its relationships
-              </p>
+              <p className="font-medium text-foreground">Graph Interaction Tips</p>
+              <ul className="text-xs text-muted-foreground mt-1 space-y-1">
+                <li>• <span className="font-bold">Click nodes</span> to view details</li>
+                <li>• <span className="font-bold">Double-click</span> to expand child nodes</li>
+                <li>• <span className="font-bold">Tree Layout</span> organizes nodes hierarchically</li>
+                <li>• <span className="font-bold">Drag nodes</span> to adjust positions if needed</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -484,6 +853,13 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
           <p className="text-muted-foreground">Run a query to visualize graph data</p>
         </div>
       )}
+      
+      {/* Category View Indicator */}
+      <div className="absolute top-2 left-2 z-10">
+        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md font-semibold text-sm border border-blue-300">
+          Starting with Categories - Double-click to Explore
+        </div>
+      </div>
     </div>
   );
 }
