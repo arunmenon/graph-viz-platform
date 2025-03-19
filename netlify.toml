@@ -1,0 +1,31 @@
+[images]
+  remote_images = ["https://source.unsplash.com/.*", "https://images.unsplash.com/.*", "https://ext.same-assets.com/.*", "https://ugc.same-assets.com/.*"]
+
+[build]
+  command = "bun run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20.3.0"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[dev]
+  command = "bun run dev"
+  port = 3000
+  targetPort = 3000
+
+# Redirect all routes to Next.js
+[[redirects]]
+  from = "/*"
+  to = "/_next/static/"
+  status = 200
+  force = false
+  conditions = {type = "static"}
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
