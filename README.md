@@ -149,7 +149,7 @@ The platform connects to a Neo4j database with these default settings:
 ```
 URI: neo4j://localhost:7687
 Username: neo4j
-Password: Rathum12!
+Password: *****password******
 ```
 
 Multiple connection options are attempted if the primary fails, including:
