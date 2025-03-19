@@ -117,17 +117,43 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
   const nodes = new Map();
   const links = new Map(); // Changed to Map for deduplication with proper keys
 
-  // Color mapping for different node types
+  // Color mapping for different node types - using highly distinct colors
   const colorMap: Record<string, string> = {
-    Regulation: '#2980b9',
-    Standard: '#3498db',
-    Organization: '#e67e22',
-    Concept: '#3498db',
-    Entity: '#3498db',
-    Compliance: '#16a085',
-    'Legal Case': '#8e44ad',
-    Legislation: '#c0392b',
-    default: '#95a5a6',
+    // Main categories - blue family for root nodes
+    Category: '#0047AB',       // Cobalt Blue - for root categories (very distinct)
+    'Root Category': '#0047AB', // Same cobalt blue
+    Root: '#0047AB',          // Same cobalt blue
+    
+    // Subcategories - completely different color family (red/orange)
+    Subcategory: '#D32F2F',    // Bright red (very different from blue)
+    'Sub Category': '#D32F2F', // Same bright red
+    
+    // Regulatory items - green family
+    Regulation: '#388E3C',     // Dark green
+    Standard: '#66BB6A',       // Medium green
+    Requirement: '#A5D6A7',    // Light green
+    
+    // Organizational items - purple family
+    Organization: '#7B1FA2',   // Dark purple
+    Department: '#9C27B0',     // Medium purple
+    Team: '#BA68C8',           // Light purple
+    
+    // Legal items - brown/sepia family
+    'Legal Case': '#5D4037',   // Dark brown
+    Legislation: '#795548',    // Medium brown
+    Act: '#8D6E63',            // Light brown
+    
+    // Concept items - yellow/gold family
+    Concept: '#FFC107',        // Amber yellow
+    Entity: '#FFD54F',         // Light amber
+    Term: '#FFECB3',           // Very light amber
+    
+    // Compliance items - teal/cyan family
+    Compliance: '#00796B',     // Dark teal
+    Control: '#26A69A',        // Medium teal
+    
+    // Default for unknown types
+    default: '#757575',        // Medium gray
   };
 
   try {
@@ -138,10 +164,14 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
       record.forEach((value, key) => {
         console.log(`Processing record field: ${key}, type:`, typeof value, value ? value.constructor.name : 'null');
         
-        // Skip null values
+        // Skip null values but make sure we process node fields even if relationship is null
         if (!value) {
           console.log(`Skipping null/undefined value for key: ${key}`);
-          return;
+          // Still continue if this is a node field (we'll want to process just the nodes for root-only view)
+          // Only return and skip if it's not the node
+          if (key !== 'n') {
+            return;
+          }
         }
         
         if (neo4j.isNode(value)) {
@@ -151,19 +181,35 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
           const labels = node.labels;
           const properties = node.properties as Record<string, any>;
           
-          // Get the type from labels or default to the first label
-          const type = properties.type || (labels.length > 0 ? labels[0] : 'Unknown');
+          // Properly identify node type from labels and properties
+          let type = properties.type;
+          
+          // If type is not explicitly set, check labels
+          if (!type && labels.length > 0) {
+            // Check for Category in labels array first
+            if (labels.includes('Category')) {
+              type = 'Category';
+            } else {
+              // Default to first label
+              type = labels[0];
+            }
+          }
+          
+          // Always respect the Category label
+          if (labels.includes('Category')) {
+            type = 'Category';
+          }
           
           // Create a more human-readable label for the node
           let nodeLabel = '';
           
           // First try to get an explicit name property
           if (properties.name) {
-            nodeLabel = properties.name;
+            nodeLabel = String(properties.name).replace(/\|/g, '-');
           } else if (properties.title) {
-            nodeLabel = properties.title;
+            nodeLabel = String(properties.title).replace(/\|/g, '-');
           } else if (properties.label) {
-            nodeLabel = properties.label;
+            nodeLabel = String(properties.label).replace(/\|/g, '-');
           } else if (properties.id && typeof properties.id === 'string') {
             // Use ID if it's a string that looks like a name
             const idStr = properties.id.toString();
@@ -171,6 +217,7 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
             if (!/^\d+$/.test(idStr)) {
               nodeLabel = idStr
                 .replace(/_/g, ' ')
+                .replace(/\|/g, '-')
                 .replace(/([A-Z])/g, ' $1')
                 .trim();
             }
@@ -180,6 +227,7 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
           if (!nodeLabel && labels.length > 0) {
             const labelName = labels[0]
               .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
+              .replace(/\|/g, '-')        // Replace pipe with dash
               .trim();
               
             const shortId = nodeId.substring(0, 3);
@@ -188,6 +236,9 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
             // Last resort - just use Node plus ID
             nodeLabel = `Node ${nodeId.substring(0, 3)}`;
           }
+          
+          // Final safety check to replace any remaining pipe characters
+          nodeLabel = nodeLabel.replace(/\|/g, '-');
 
           // Create node if it doesn't exist
           if (!nodes.has(nodeId)) {
@@ -225,10 +276,13 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
               
               // Only add if we don't already have this link (regardless of direction)
               if (!links.has(linkKey)) {
+                // Sanitize relationship label to remove pipe characters
+                const relationshipLabel = (rel.type || 'RELATED_TO').replace(/\|/g, '-');
+                
                 links.set(linkKey, {
                   source: startId,
                   target: endId,
-                  label: rel.type || 'RELATED_TO',
+                  label: relationshipLabel,
                 });
               }
             } else {
@@ -293,11 +347,11 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
               
               // First try to get an explicit name property
               if (endNodeProperties.name) {
-                endNodeLabel = endNodeProperties.name;
+                endNodeLabel = String(endNodeProperties.name).replace(/\|/g, '-');
               } else if (endNodeProperties.title) {
-                endNodeLabel = endNodeProperties.title;
+                endNodeLabel = String(endNodeProperties.title).replace(/\|/g, '-');
               } else if (endNodeProperties.label) {
-                endNodeLabel = endNodeProperties.label;
+                endNodeLabel = String(endNodeProperties.label).replace(/\|/g, '-');
               } else if (endNodeProperties.id && typeof endNodeProperties.id === 'string') {
                 // Use ID if it's a string that looks like a name
                 const idStr = endNodeProperties.id.toString();
@@ -305,6 +359,7 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
                 if (!/^\d+$/.test(idStr)) {
                   endNodeLabel = idStr
                     .replace(/_/g, ' ')
+                    .replace(/\|/g, '-')
                     .replace(/([A-Z])/g, ' $1')
                     .trim();
                 }
@@ -314,6 +369,7 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
               if (!endNodeLabel && endNodeLabels.length > 0) {
                 const labelName = endNodeLabels[0]
                   .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
+                  .replace(/\|/g, '-')        // Replace pipe with dash
                   .trim();
                   
                 const shortId = endNodeId.substring(0, 3);
@@ -322,6 +378,9 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
                 // Last resort - just use Node plus ID
                 endNodeLabel = `Node ${endNodeId.substring(0, 3)}`;
               }
+              
+              // Final safety check to replace any remaining pipe characters
+              endNodeLabel = endNodeLabel.replace(/\|/g, '-');
               
               if (!nodes.has(endNodeId)) {
                 nodes.set(endNodeId, {
@@ -350,10 +409,13 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
                 
                 // Only add if we don't already have this link (regardless of direction)
                 if (!links.has(linkKey)) {
+                  // Sanitize relationship label to remove pipe characters
+                  const relationshipLabel = relationship.type.replace(/\|/g, '-');
+                  
                   links.set(linkKey, {
                     source: startNodeId,
                     target: endNodeId,
-                    label: relationship.type,
+                    label: relationshipLabel,
                   });
                 }
               } else {
@@ -393,14 +455,28 @@ export async function expandNode(nodeId: string) {
     
     console.log(`Expanding node: ${nodeId}`);
     
-    // More specific query that explicitly returns the complete path
+    // Simple and flexible query for expansion
     const query = `
-      // Get all relationships for this node (both directions)
-      // Use DISTINCT to avoid duplicate relationships
-      MATCH path = (n)-[r]-(m)
+      // Match any node we want to expand
+      MATCH (n)
       WHERE id(n) = $nodeId
-      RETURN DISTINCT n, r, m, path
-      LIMIT 20
+      
+      // Get all direct relationships and connected nodes
+      MATCH (n)-[r]->(child)
+      
+      // Return the expanded node and its direct connections
+      RETURN DISTINCT n, r, child as m, null as path
+      
+      UNION
+      
+      // Also get relationships between children
+      MATCH (n)-[r1]->(child1)
+      MATCH (n)-[r2]->(child2)
+      MATCH (child1)-[r3]-(child2)
+      WHERE id(n) = $nodeId AND id(child1) <> id(child2)
+      RETURN DISTINCT child1 as n, r3 as r, child2 as m, null as path
+      
+      LIMIT 30
     `;
     
     const records = await runQuery(query, { nodeId: idParam });
@@ -409,12 +485,15 @@ export async function expandNode(nodeId: string) {
     if (records.length === 0) {
       console.log(`No connections found for node ${nodeId}, trying alternate query`);
       
-      // Try a more permissive query if the first one returns nothing
+      // Simple fallback query without pipe characters
       const altQuery = `
         MATCH (n)
         WHERE id(n) = $nodeId
-        WITH n
+        
+        // Find all relationships in either direction
         MATCH (n)-[r]-(m)
+        
+        // Return them as-is
         RETURN n, r, m
         LIMIT 20
       `;
@@ -461,18 +540,22 @@ export async function expandNode(nodeId: string) {
 
 export async function fetchComplianceGraph() {
   try {
-    // Use a direct path-based query that explicitly returns complete paths
+    // Find all top-level Category nodes without hardcoding specific categories
     const query = `
-      // Find the most connected node as a starting point
-      MATCH (n)-[r]-()
-      WITH n, count(r) as rel_count
-      ORDER BY rel_count DESC
-      LIMIT 1
+      // Find any nodes with Category label or type
+      MATCH (category:Category)
       
-      // Get its immediate neighborhood (1-hop) as complete paths
-      // Use DISTINCT to avoid duplicate relationships
-      MATCH path = (n)-[r]-(m)
-      RETURN DISTINCT n, r, m, path
+      // Return ONLY Category nodes
+      RETURN category as n, null as r, null as m, null as path
+      
+      UNION
+      
+      // Or find nodes with type = 'Category'
+      MATCH (category)
+      WHERE category.type = 'Category'
+      
+      // Return ONLY Category nodes
+      RETURN category as n, null as r, null as m, null as path
       LIMIT 20
     `;
     
@@ -480,9 +563,33 @@ export async function fetchComplianceGraph() {
     const records = await runQuery(query);
     console.log(`Query returned ${records.length} records`);
     
-    // If that returns no data, try to fetch nodes and create relationships manually
-    if (records.length === 0 || !records[0] || !records[0].get('r')) {
-      console.log("No relationships found, trying to find any nodes");
+    // If no root nodes found, fall back to most connected nodes
+    if (records.length === 0) {
+      console.log("No root nodes found, falling back to most connected nodes");
+      
+      // Fall back to most connected nodes approach
+      const fallbackQuery = `
+        // Find the most connected node as a starting point
+        MATCH (n)-[r]-()
+        WITH n, count(r) as rel_count
+        ORDER BY rel_count DESC
+        LIMIT 1
+        
+        // Get its immediate neighborhood (1-hop) as complete paths
+        MATCH path = (n)-[r]-(m)
+        RETURN DISTINCT n, r, m, path
+        LIMIT 20
+      `;
+      
+      console.log("Executing fallback query");
+      const fallbackRecords = await runQuery(fallbackQuery);
+      
+      if (fallbackRecords.length > 0) {
+        console.log(`Fallback query found ${fallbackRecords.length} records`);
+        return transformNeo4jToGraph(fallbackRecords);
+      }
+      
+      console.log("No relationships found with fallback query, trying to find any nodes");
       
       // Just get all nodes
       const nodeQuery = `MATCH (n) RETURN n LIMIT 50`;
