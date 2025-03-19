@@ -218,13 +218,19 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
                 type: rel.type 
               });
               
-              // Create a unique key for this link to prevent duplicates
-              const linkKey = `${startId}-${endId}-${rel.type || 'RELATED_TO'}`;
-              links.set(linkKey, {
-                source: startId,
-                target: endId,
-                label: rel.type || 'RELATED_TO',
-              });
+              // Create a unique key for this link that ignores direction to prevent duplicates
+              // Sort the IDs to ensure the same link doesn't appear twice regardless of direction
+              const [nodeA, nodeB] = [startId, endId].sort();
+              const linkKey = `${nodeA}-${nodeB}-${rel.type || 'RELATED_TO'}`;
+              
+              // Only add if we don't already have this link (regardless of direction)
+              if (!links.has(linkKey)) {
+                links.set(linkKey, {
+                  source: startId,
+                  target: endId,
+                  label: rel.type || 'RELATED_TO',
+                });
+              }
             } else {
               console.warn("Failed to create relationship - cannot find node identities in record");
             }
@@ -337,13 +343,19 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
                   type: relationship.type
                 });
                 
-                // Create a unique key for this link to prevent duplicates
-                const linkKey = `${startNodeId}-${endNodeId}-${relationship.type}`;
-                links.set(linkKey, {
-                  source: startNodeId,
-                  target: endNodeId,
-                  label: relationship.type,
-                });
+                // Create a unique key for this link that ignores direction to prevent duplicates
+                // Sort the IDs to ensure the same link doesn't appear twice regardless of direction
+                const [nodeA, nodeB] = [startNodeId, endNodeId].sort();
+                const linkKey = `${nodeA}-${nodeB}-${relationship.type}`;
+                
+                // Only add if we don't already have this link (regardless of direction)
+                if (!links.has(linkKey)) {
+                  links.set(linkKey, {
+                    source: startNodeId,
+                    target: endNodeId,
+                    label: relationship.type,
+                  });
+                }
               } else {
                 console.warn("Skipping path segment - missing node IDs");
               }
@@ -384,9 +396,10 @@ export async function expandNode(nodeId: string) {
     // More specific query that explicitly returns the complete path
     const query = `
       // Get all relationships for this node (both directions)
+      // Use DISTINCT to avoid duplicate relationships
       MATCH path = (n)-[r]-(m)
       WHERE id(n) = $nodeId
-      RETURN n, r, m, path
+      RETURN DISTINCT n, r, m, path
       LIMIT 20
     `;
     
@@ -457,8 +470,9 @@ export async function fetchComplianceGraph() {
       LIMIT 1
       
       // Get its immediate neighborhood (1-hop) as complete paths
+      // Use DISTINCT to avoid duplicate relationships
       MATCH path = (n)-[r]-(m)
-      RETURN n, r, m, path
+      RETURN DISTINCT n, r, m, path
       LIMIT 20
     `;
     
