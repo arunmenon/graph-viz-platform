@@ -33,6 +33,7 @@ interface StoreState {
   setGraphData: (data: GraphData) => void;
   updateOriginalGraphData: (data: GraphData) => void;
   addNodesToGraph: (newData: GraphData) => void; // Add new nodes to existing graph
+  updateGraphData: (data: GraphData) => void; // Update graph data without affecting original
   setLastQuery: (query: string) => void;
   clearGraph: () => void;
   loadSampleData: () => void;
@@ -169,5 +170,11 @@ export const useStore = create<StoreState>((set, get) => ({
     if (originalGraphData) {
       set({ graphData: originalGraphData });
     }
+  },
+  
+  // Update graph data temporarily without affecting original data
+  // This is useful for collapsing/filtering without losing the full graph
+  updateGraphData: (data) => {
+    set({ graphData: data });
   },
 }));
