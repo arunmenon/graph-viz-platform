@@ -331,8 +331,10 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
     const now = Date.now();
     const lastClick = lastClickRef.current;
     
-    // Check for double-click (click on same node within 300ms)
-    if (lastClick && lastClick.nodeId === node.id && now - lastClick.time < 300) {
+    // Make double-click detection more forgiving - use 500ms and ignore exact node match
+    // This makes node expansion easier, effectively making a single click work after
+    // the first click on any node
+    if (lastClick && now - lastClick.time < 500) {
       // This is a double-click, expand the node
       console.log("Double-click detected on node:", node.id);
       
@@ -460,7 +462,7 @@ export function GraphVisualization({ onNodeClick }: GraphVisualizationProps) {
             <div>
               <p className="font-medium text-foreground">Expand the Graph</p>
               <p className="text-xs text-muted-foreground mt-1">
-                <span className="font-bold">Double-click</span> on any node to explore its relationships
+                <span className="font-bold">Click any node</span> to select it, then <span className="font-bold">click again</span> to expand and explore its relationships
               </p>
             </div>
           </div>

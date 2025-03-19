@@ -88,11 +88,14 @@ export const useStore = create<StoreState>((set, get) => ({
       };
     };
     
-    // Create a Map of existing links for faster lookup
+    // Create a Map of existing links for faster lookup with direction-agnostic keys
     const existingLinks = new Map();
     currentData.links.forEach(link => {
       const normalizedLink = normalizeLink(link);
-      const linkKey = `${normalizedLink.source}-${normalizedLink.target}-${normalizedLink.label}`;
+      // Sort IDs to make the key direction-agnostic
+      const [nodeA, nodeB] = [normalizedLink.source, normalizedLink.target].sort();
+      // Use a direction-agnostic key to prevent duplicate edges
+      const linkKey = `${nodeA}-${nodeB}-${normalizedLink.label}`;
       existingLinks.set(linkKey, link);
     });
     
@@ -110,11 +113,18 @@ export const useStore = create<StoreState>((set, get) => ({
         return;
       }
       
-      // Check if this link already exists
-      const linkKey = `${sourceId}-${targetId}-${normalizedLink.label}`;
+      // Check if this link already exists - using direction-agnostic key
+      // Sort IDs to make the key direction-agnostic
+      const [nodeA, nodeB] = [sourceId, targetId].sort();
+      const linkKey = `${nodeA}-${nodeB}-${normalizedLink.label}`;
+      
+      // Only add if we don't already have this link (regardless of direction)
       if (!existingLinks.has(linkKey)) {
+        console.log(`Adding new link: ${sourceId} -> ${targetId} (${normalizedLink.label})`);
         // Add the original link, it will be processed to object references later
         newLinks.push(link);
+      } else {
+        console.log(`Skipping duplicate link: ${sourceId} -> ${targetId} (${normalizedLink.label})`);
       }
     });
     
