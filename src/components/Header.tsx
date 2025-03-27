@@ -10,7 +10,7 @@ export function Header() {
       <div className="flex h-16 items-center px-4">
         <div className="flex items-center gap-2 font-semibold">
           <Database className="h-6 w-6 text-blue-500" />
-          <span className="text-xl">Graph Viz Platform</span>
+          <span className="text-xl">Graph Alchemy</span>
         </div>
         <nav className="ml-auto flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>

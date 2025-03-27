@@ -11,10 +11,10 @@ export default function Home() {
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight mb-4">
-            Interactive Graph Visualization Platform
+            Data Schema Visualization & Semantic Mapping
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Query, explore, and visualize your graph data with an intuitive interface
+            Connect your BigQuery schemas to semantic concepts with interactive visualization
           </p>
           <Button size="lg" asChild>
             <Link href="/explore">
@@ -45,17 +45,17 @@ export default function Home() {
           <Card>
             <CardHeader>
               <Database className="h-10 w-10 text-blue-500 mb-2" />
-              <CardTitle>Compliance Taxonomy</CardTitle>
+              <CardTitle>Domain Graph</CardTitle>
               <CardDescription>
-                Explore the regulatory compliance knowledge graph
+                Explore your data's semantic domain knowledge graph
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p>Navigate through compliance relationships, standards, and regulatory frameworks in an interactive visualization.</p>
+              <p>Navigate connections between BigQuery schemas (tables/columns) and semantic concepts in an intuitive, interactive visualization.</p>
             </CardContent>
             <CardFooter>
               <Button variant="outline" size="sm" className="ml-auto" asChild>
-                <Link href="/explore?action=browse">Explore Taxonomy</Link>
+                <Link href="/explore?action=browse">Explore Domain Graph</Link>
               </Button>
             </CardFooter>
           </Card>
@@ -80,7 +80,7 @@ export default function Home() {
         </div>
       </main>
       <footer className="border-t py-6 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Graph Viz Platform. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Graph Alchemy. All rights reserved.</p>
       </footer>
     </div>
   );

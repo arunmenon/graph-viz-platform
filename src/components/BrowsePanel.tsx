@@ -33,7 +33,7 @@ export function BrowsePanel() {
         throw new Error(`Neo4j connection failed: ${connectionTest.error}`);
       }
       
-      // Load compliance data from Neo4j
+      // Load domain graph data from Neo4j
       const graphData = await fetchComplianceGraph();
       
       // Check if we got empty data
@@ -83,22 +83,22 @@ export function BrowsePanel() {
       setNodeTypes(Array.from(types));
       setSelectedNodeTypes(new Set(Array.from(types))); // Select all by default
       
-      console.log("Successfully loaded compliance graph:", {
+      console.log("Successfully loaded domain graph:", {
         nodes: graphData.nodes.length,
         links: graphData.links.length,
         nodeTypes: Array.from(types)
       });
       
     } catch (err) {
-      console.error("Error loading compliance taxonomy:", err);
+      console.error("Error loading domain graph:", err);
       
       // Extract and format error details
       const errorMessage = err.message || "Unknown error";
       const errorDetails = err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : "";
-      setError(`Failed to connect to Neo4j database: ${errorMessage}\n${errorDetails}`);
+      setError(`Failed to connect to database: ${errorMessage}\n${errorDetails}`);
       
       // Alert for immediate visibility during debugging
-      alert(`Neo4j connection failed: ${errorMessage}`);
+      alert(`Database connection failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +178,7 @@ export function BrowsePanel() {
             ) : (
               <>
                 <Database className="mr-2 h-4 w-4" />
-                Load Compliance Taxonomy
+                Load Domain Graph
               </>
             )}
           </Button>
@@ -240,30 +240,32 @@ export function BrowsePanel() {
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-700 text-sm flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Connected to Neo4j, but no data was found</p>
+              <p className="font-medium">Connected, but no data was found</p>
               <p className="mt-1">
-                The Neo4j database appears to be empty or doesn't contain compliance data.
+                The database appears to be empty or doesn't contain domain graph data.
                 Showing sample data for demonstration purposes.
               </p>
               <p className="mt-1 text-xs">
-                To populate your Neo4j database, you can create compliance nodes and relationships.
-                Example Cypher query:
+                To populate your domain graph, you can create tables, columns and semantic concept relationships.
+                Example:
               </p>
               <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-auto">
-{`CREATE (cg:Standard {name: 'Content Guidelines', type: 'Standard'})
-CREATE (reg:Regulation {name: '18 U.S.C. § 1464', type: 'Regulation'})
-CREATE (reg)-[:REGULATES]->(cg)`}
+{`CREATE (tbl:Table {name: 'customers', type: 'Table'})
+CREATE (col:Column {name: 'customer_id', type: 'Column'})
+CREATE (concept:Concept {name: 'Person', type: 'Concept'})
+CREATE (tbl)-[:CONTAINS]->(col)
+CREATE (col)-[:MAPS_TO]->(concept)`}
               </pre>
             </div>
           </div>
         )}
         
         <div className="border rounded-md p-3 bg-muted/30">
-          <h3 className="font-medium mb-2">About the Compliance Taxonomy</h3>
+          <h3 className="font-medium mb-2">About the Domain Graph</h3>
           <p className="text-sm text-muted-foreground">
-            The Compliance Taxonomy is a knowledge graph representing regulatory frameworks, 
-            standards, and their relationships. You can explore connections between different 
-            compliance entities and understand how they relate to each other.
+            The Domain Graph is a knowledge graph connecting BigQuery schemas (tables/columns) to semantic concepts.
+            You can explore connections between your data structures and domain concepts to better understand
+            the semantic meaning of your data elements.
           </p>
         </div>
       </div>
