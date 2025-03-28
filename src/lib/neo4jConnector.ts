@@ -335,15 +335,12 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
       });
     });
     
-    // Return the processed graph data
     return {
       nodes: Array.from(nodes.values()),
       links: Array.from(links.values()),
     };
-    
   } catch (error) {
     console.error("Error transforming Neo4j data:", error);
-    // Return empty data on error
     return { nodes: [], links: [] };
   }
 }
