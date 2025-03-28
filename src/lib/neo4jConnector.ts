@@ -463,7 +463,8 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
     // Return empty data structure on error
     return { nodes: [], links: [] };
   }
-
+  
+  // If we get here, return the processed data
   return {
     nodes: Array.from(nodes.values()),
     links: Array.from(links.values()),
