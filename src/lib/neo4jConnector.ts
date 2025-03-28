@@ -21,17 +21,36 @@ console.log('Neo4j connection settings:', {
   }
 });
 
-// Initialize the driver
+// Connection management with rate limiting
 let driver: neo4j.Driver | null = null;
+let lastConnectionAttempt = 0;
+const CONNECTION_THROTTLE_MS = 10000; // Minimum 10 seconds between connection attempts
 
 export function initDriver() {
   try {
-    if (!driver) {
-      console.log("Connecting to Neo4j at", NEO4J_URI);
-      driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
-        connectionTimeout: 10000, // 10 seconds
-      });
+    // Check if we already have a valid driver
+    if (driver) {
+      return driver;
     }
+    
+    // Throttle connection attempts
+    const now = Date.now();
+    if (now - lastConnectionAttempt < CONNECTION_THROTTLE_MS) {
+      console.log("Connection attempts throttled. Please wait before retrying.");
+      throw new Error("Too many connection attempts. Please wait a few seconds before retrying.");
+    }
+    
+    lastConnectionAttempt = now;
+    
+    console.log("Initializing Neo4j driver at", NEO4J_URI);
+    driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
+      connectionTimeout: 10000, // 10 seconds
+      maxConnectionLifetime: 60 * 60 * 1000, // 1 hour
+      maxConnectionPoolSize: 10,
+      connectionAcquisitionTimeout: 5000,
+      disableLosslessIntegers: true,
+    });
+    
     return driver;
   } catch (error) {
     console.error("Error initializing Neo4j driver:", error);
@@ -41,21 +60,14 @@ export function initDriver() {
 
 // Test the connection to Neo4j
 export async function testConnection() {
-  // Close any existing driver first
-  if (driver) {
-    await driver.close();
-    driver = null;
-  }
-  
   try {
-    // Create a new driver with the environment settings
+    // Use any existing driver or create a new one
+    const currentDriver = driver || initDriver();
+    
+    // Just verify connectivity without creating a new connection
     console.log("Testing Neo4j connection to:", NEO4J_URI);
+    const serverInfo = await currentDriver.verifyConnectivity();
     
-    driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
-      connectionTimeout: 5000,  // 5 seconds timeout for faster testing
-    });
-    
-    const serverInfo = await driver.verifyConnectivity();
     console.log("Successfully connected to Neo4j:", serverInfo);
     return { 
       success: true, 
@@ -68,6 +80,16 @@ export async function testConnection() {
   } catch (error) {
     console.error("Failed to connect to Neo4j:", error);
     
+    // Clean up any failed driver
+    if (driver) {
+      try {
+        await driver.close();
+      } catch (e) {
+        console.log("Error closing failed driver:", e);
+      }
+      driver = null;
+    }
+    
     // More helpful error message based on the error type
     let errorMessage = "Failed to connect to Neo4j database";
     
@@ -75,6 +97,8 @@ export async function testConnection() {
       errorMessage = `Neo4j database is not available at ${NEO4J_URI}. Is the database running?`;
     } else if (error.message && error.message.includes('unauthorized')) {
       errorMessage = `Authentication failed for user '${NEO4J_USER}'. Check your credentials in .env.local file.`;
+    } else if (error.message && error.message.includes('Pool is closed')) {
+      errorMessage = `Connection pool is closed. The application will create a new connection on next attempt.`;
     }
     
     return { 
@@ -93,15 +117,47 @@ export async function closeDriver() {
 }
 
 export async function runQuery(cypher: string, params = {}) {
-  const session = initDriver().session();
+  let session = null;
+  
   try {
+    // Initialize driver and create a session
+    const currentDriver = initDriver();
+    session = currentDriver.session();
+    
+    // Run the query
+    console.log("Running Neo4j query:", cypher.substring(0, 100) + (cypher.length > 100 ? "..." : ""));
     const result = await session.run(cypher, params);
     return result.records;
   } catch (error) {
+    // Handle different types of errors
     console.error("Error running Neo4j query:", error);
+    
+    // If it's a connection error, clear the driver for next attempt
+    if (error.message && (
+        error.message.includes('Pool is closed') || 
+        error.message.includes('connection') ||
+        error.message.includes('Connection')
+      )) {
+      if (driver) {
+        try {
+          await driver.close();
+        } catch (e) {
+          console.log("Error closing failed driver:", e);
+        }
+        driver = null;
+      }
+    }
+    
     throw error;
   } finally {
-    await session.close();
+    // Always close the session to release resources
+    if (session) {
+      try {
+        await session.close();
+      } catch (e) {
+        console.log("Error closing session:", e);
+      }
+    }
   }
 }
 

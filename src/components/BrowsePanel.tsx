@@ -17,15 +17,49 @@ export function BrowsePanel() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [nodeTypes, setNodeTypes] = useState<string[]>([]);
   const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
-
   const [noData, setNoData] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
   
   // Auto-load domain graph data when component mounts
   useEffect(() => {
     handleLoadDomainGraph();
   }, []);
   
+  // Use sample data when Neo4j is not available
+  const useSampleData = () => {
+    console.warn("Using sample data for demonstration");
+    setNoData(true);
+    
+    // Load sample data for demonstration
+    const sampleData = generateSampleData();
+    
+    // Get store actions
+    const { setGraphData, updateOriginalGraphData } = useStore.getState();
+    
+    // Update both current and original data
+    setGraphData(sampleData);
+    updateOriginalGraphData(sampleData);
+    
+    // Collect sample data node types
+    const types = new Set<string>();
+    sampleData.nodes.forEach(node => {
+      if (node.type) {
+        types.add(node.type);
+      }
+    });
+    
+    setNodeTypes(Array.from(types));
+    setSelectedNodeTypes(new Set(Array.from(types)));
+  };
+  
   const handleLoadDomainGraph = async () => {
+    // Prevent excessive connection attempts
+    if (connectionAttempts > 2) {
+      setError("Too many connection attempts. Using sample data instead.");
+      useSampleData();
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     setNoData(false);
@@ -35,38 +69,20 @@ export function BrowsePanel() {
       const connectionTest = await testConnection();
       
       if (!connectionTest.success) {
+        // Increment connection attempts
+        setConnectionAttempts(prev => prev + 1);
         throw new Error(`Neo4j connection failed: ${connectionTest.error}`);
       }
+      
+      // Reset connection attempt counter on success
+      setConnectionAttempts(0);
       
       // Load domain graph data from Neo4j
       const graphData = await fetchComplianceGraph();
       
       // Check if we got empty data
       if (!graphData || graphData.nodes.length === 0) {
-        console.warn("Connected to Neo4j but no data was returned");
-        setNoData(true);
-        
-        // Load sample data for demonstration
-        const sampleData = generateSampleData();
-        
-        // Get store actions
-        const { setGraphData, updateOriginalGraphData } = useStore.getState();
-        
-        // Update both current and original data
-        setGraphData(sampleData);
-        updateOriginalGraphData(sampleData);
-        
-        // Collect sample data node types
-        const types = new Set<string>();
-        sampleData.nodes.forEach(node => {
-          if (node.type) {
-            types.add(node.type);
-          }
-        });
-        
-        setNodeTypes(Array.from(types));
-        setSelectedNodeTypes(new Set(Array.from(types)));
-        
+        useSampleData();
         return;
       }
       
@@ -100,12 +116,35 @@ export function BrowsePanel() {
       // Extract and format error details
       let errorMessage = err.message || "Unknown error";
       
-      // Display a more user-friendly error message
-      if (errorMessage.includes("Failed to connect to Neo4j with all connection options")) {
-        errorMessage = "Could not connect to Neo4j database. Please check your connection settings.";
+      // Format a better user message
+      if (errorMessage.includes("Failed to connect to Neo4j")) {
+        if (errorMessage.includes("Too many connection attempts")) {
+          errorMessage = "Connection rate limited. Please wait a moment before trying again.";
+        } else if (errorMessage.includes("authentication")) {
+          errorMessage = "Authentication failed. Please check your Neo4j credentials in .env.local file.";
+        } else if (errorMessage.includes("Pool is closed")) {
+          errorMessage = "Connection pool error. The application will try again automatically.";
+        } else {
+          errorMessage = "Could not connect to Neo4j database. Please verify it's running and accessible.";
+        }
       }
       
       setError(errorMessage);
+      
+      // For specific errors, retry after a delay
+      if (errorMessage.includes("pool") || errorMessage.includes("Connection pool error")) {
+        setTimeout(() => {
+          if (connectionAttempts <= 2) {
+            console.log("Retrying connection after pool error...");
+            handleLoadDomainGraph();
+          } else {
+            useSampleData();
+          }
+        }, 5000); // 5 second delay
+      } else if (connectionAttempts > 1) {
+        // After multiple attempts, use sample data
+        useSampleData();
+      }
       
       // Log the full error to console for debugging
       console.error("Detailed connection error:", err);
