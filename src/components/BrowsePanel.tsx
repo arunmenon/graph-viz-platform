@@ -98,12 +98,17 @@ export function BrowsePanel() {
       console.error("Error loading domain graph:", err);
       
       // Extract and format error details
-      const errorMessage = err.message || "Unknown error";
-      const errorDetails = err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : "";
-      setError(`Failed to connect to database: ${errorMessage}\n${errorDetails}`);
+      let errorMessage = err.message || "Unknown error";
       
-      // Alert for immediate visibility during debugging
-      alert(`Database connection failed: ${errorMessage}`);
+      // Display a more user-friendly error message
+      if (errorMessage.includes("Failed to connect to Neo4j with all connection options")) {
+        errorMessage = "Could not connect to Neo4j database. Please check your connection settings.";
+      }
+      
+      setError(errorMessage);
+      
+      // Log the full error to console for debugging
+      console.error("Detailed connection error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -229,15 +234,17 @@ export function BrowsePanel() {
         
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-            {error}
-            <p className="mt-1">
-              Connection troubleshooting:
-            </p>
-            <ul className="list-disc pl-5 mt-1 text-xs">
-              <li>Make sure Neo4j is running at {process.env.NEXT_PUBLIC_NEO4J_URI || 'neo4j://localhost:7687'}</li>
-              <li>Verify the credentials in your .env.local file are correct</li>
-              <li>Check if Neo4j database is accessible from this environment</li>
-            </ul>
+            <div className="font-medium mb-1">Connection Error:</div>
+            <div className="mb-2">{error}</div>
+            <div className="mt-2 border-t border-red-200 pt-2">
+              <p className="font-medium text-sm">Troubleshooting steps:</p>
+              <ul className="list-disc pl-5 mt-1 text-xs space-y-1">
+                <li>Make sure Neo4j is running at <code className="bg-red-100 px-1 rounded">{process.env.NEXT_PUBLIC_NEO4J_URI || 'neo4j://localhost:7687'}</code></li>
+                <li>Verify the username is <code className="bg-red-100 px-1 rounded">{process.env.NEXT_PUBLIC_NEO4J_USER || 'neo4j'}</code> in your .env.local file</li>
+                <li>Check that your password in .env.local is correct</li>
+                <li>Ensure Neo4j is reachable from your browser (no firewall blocks)</li>
+              </ul>
+            </div>
           </div>
         )}
         

@@ -9,28 +9,11 @@ const NEO4J_URI = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4
 const NEO4J_USER = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_USER ? process.env.NEXT_PUBLIC_NEO4J_USER : 'neo4j';
 const NEO4J_PASSWORD = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_PASSWORD ? process.env.NEXT_PUBLIC_NEO4J_PASSWORD : 'neo4j';
 
-// Try different Neo4j connection options, prioritizing environment variables
-const CONNECTION_OPTIONS = [
-  // First try with env variables or defaults
-  { uri: NEO4J_URI, user: NEO4J_USER, password: NEO4J_PASSWORD },
-  
-  // Then try alternate connection methods if needed
-  { uri: NEO4J_URI.replace('neo4j://', 'bolt://'), user: NEO4J_USER, password: NEO4J_PASSWORD },
-  { uri: NEO4J_URI.replace('localhost', '127.0.0.1'), user: NEO4J_USER, password: NEO4J_PASSWORD },
-  { uri: NEO4J_URI.replace('neo4j://localhost', 'bolt://127.0.0.1'), user: NEO4J_USER, password: NEO4J_PASSWORD }
-];
-
-// Default connection to start with
-let currentConnectionIndex = 0;
-let URI = CONNECTION_OPTIONS[currentConnectionIndex].uri;
-let USER = CONNECTION_OPTIONS[currentConnectionIndex].user;
-let PASSWORD = CONNECTION_OPTIONS[currentConnectionIndex].password;
-
 // For debugging
-console.log('Initial Neo4j connection settings:', { 
-  URI, 
-  USER, 
-  PASSWORD: '********', 
+console.log('Neo4j connection settings:', { 
+  uri: NEO4J_URI, 
+  user: NEO4J_USER, 
+  password: NEO4J_PASSWORD === 'neo4j' ? 'default_password' : '********',
   env_vars_available: {
     NEXT_PUBLIC_NEO4J_URI: !!process.env.NEXT_PUBLIC_NEO4J_URI,
     NEXT_PUBLIC_NEO4J_USER: !!process.env.NEXT_PUBLIC_NEO4J_USER,
@@ -44,8 +27,8 @@ let driver: neo4j.Driver | null = null;
 export function initDriver() {
   try {
     if (!driver) {
-      console.log("Connecting to Neo4j at", URI);
-      driver = neo4j.driver(URI, neo4j.auth.basic(USER, PASSWORD), {
+      console.log("Connecting to Neo4j at", NEO4J_URI);
+      driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
         connectionTimeout: 10000, // 10 seconds
       });
     }
@@ -56,44 +39,50 @@ export function initDriver() {
   }
 }
 
-// Test the connection to Neo4j with fallback options
+// Test the connection to Neo4j
 export async function testConnection() {
-  for (let i = 0; i < CONNECTION_OPTIONS.length; i++) {
-    currentConnectionIndex = i;
-    URI = CONNECTION_OPTIONS[i].uri;
-    USER = CONNECTION_OPTIONS[i].user;
-    PASSWORD = CONNECTION_OPTIONS[i].password;
-    
-    console.log(`Trying Neo4j connection ${i+1}/${CONNECTION_OPTIONS.length}:`, 
-      { URI, USER, PASSWORD: '********' });
-    
-    // Close any existing driver
-    if (driver) {
-      await driver.close();
-      driver = null;
-    }
-    
-    try {
-      // Create a new driver with these settings
-      driver = neo4j.driver(URI, neo4j.auth.basic(USER, PASSWORD), {
-        connectionTimeout: 5000,  // 5 seconds timeout for faster testing
-      });
-      
-      const serverInfo = await driver.verifyConnectivity();
-      console.log(`Successfully connected to Neo4j with option ${i+1}:`, serverInfo);
-      return { success: true, serverInfo, connectionDetails: { URI, USER } };
-    } catch (error) {
-      console.error(`Failed to connect with option ${i+1}:`, error);
-      // Continue to next option
-    }
+  // Close any existing driver first
+  if (driver) {
+    await driver.close();
+    driver = null;
   }
   
-  // If we reach here, all connection attempts failed
-  return { 
-    success: false, 
-    error: new Error("Failed to connect to Neo4j with all connection options"),
-    triedOptions: CONNECTION_OPTIONS.map(opt => opt.uri)
-  };
+  try {
+    // Create a new driver with the environment settings
+    console.log("Testing Neo4j connection to:", NEO4J_URI);
+    
+    driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
+      connectionTimeout: 5000,  // 5 seconds timeout for faster testing
+    });
+    
+    const serverInfo = await driver.verifyConnectivity();
+    console.log("Successfully connected to Neo4j:", serverInfo);
+    return { 
+      success: true, 
+      serverInfo, 
+      connectionDetails: { 
+        uri: NEO4J_URI, 
+        user: NEO4J_USER 
+      } 
+    };
+  } catch (error) {
+    console.error("Failed to connect to Neo4j:", error);
+    
+    // More helpful error message based on the error type
+    let errorMessage = "Failed to connect to Neo4j database";
+    
+    if (error.code === 'ServiceUnavailable') {
+      errorMessage = `Neo4j database is not available at ${NEO4J_URI}. Is the database running?`;
+    } else if (error.message && error.message.includes('unauthorized')) {
+      errorMessage = `Authentication failed for user '${NEO4J_USER}'. Check your credentials in .env.local file.`;
+    }
+    
+    return { 
+      success: false, 
+      error: new Error(errorMessage),
+      originalError: error
+    };
+  }
 }
 
 export async function closeDriver() {
