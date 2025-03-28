@@ -1,6 +1,6 @@
-# Graph Visualization Platform
+# Graph Alchemy
 
-A powerful web-based platform for visualizing and exploring graph data, built with Next.js and Neo4j. This application allows users to explore compliance taxonomies through an interactive graph visualization and query interface.
+A powerful web-based platform for visualizing and exploring domain graphs, built with Next.js. This application allows users to connect BigQuery schemas to semantic concepts through an interactive graph visualization and query interface.
 
 ![Graph Visualization Platform](https://example.com/screenshot.png)
 
@@ -142,30 +142,30 @@ Allows users to enter natural language queries to explore the graph.
 
 ## Setup and Configuration
 
-### Neo4j Connection
+### API Connection
 
-The platform connects to a Neo4j database with these default settings:
+The platform connects to a Graph RAG API with these settings (configurable in `.env.local`):
 
 ```
-URI: neo4j://localhost:7687
-Username: neo4j
-Password: *****password******
+API_ENDPOINT=http://localhost:8010/query
+API_USERNAME=your_username
+API_PASSWORD=your_secure_password
 ```
 
-Multiple connection options are attempted if the primary fails, including:
-- `bolt://localhost:7687`
-- `neo4j://127.0.0.1:7687`
-- `bolt://127.0.0.1:7687`
+To set up authentication, create a `.env.local` file in the project root with the above variables.
 
-### Sample Cypher Queries
+### Environment Variables
 
-To populate your Neo4j database with compliance data:
+Create a `.env.local` file in the project root with:
 
-```cypher
-CREATE (cg:Standard {name: 'Content Guidelines', type: 'Standard'})
-CREATE (reg:Regulation {name: '18 U.S.C. § 1464', type: 'Regulation'})
-CREATE (reg)-[:REGULATES]->(cg)
 ```
+# API Configuration
+API_ENDPOINT=http://localhost:8010/query
+API_USERNAME=admin
+API_PASSWORD=your_secure_password
+```
+
+The `.env.local` file is git-ignored to keep credentials secure.
 
 ## Getting Started
 

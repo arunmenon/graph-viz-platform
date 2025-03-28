@@ -10,17 +10,34 @@ export async function POST(request: Request) {
     // Create a simple request with the query
     const apiRequest = { question: body.query.trim() };
     
-    // Use the known working endpoint
-    const API_ENDPOINT = 'http://localhost:8010/query';
-    console.log(`Sending request to ${API_ENDPOINT}:`, apiRequest);
+    // Use the known working endpoint with environment variables if available
+    const API_ENDPOINT = process.env.API_ENDPOINT || 'http://localhost:8010/query';
+    
+    // Get API credentials from environment if available
+    const apiAuth = process.env.API_PASSWORD ? {
+      username: process.env.API_USERNAME || '',
+      password: process.env.API_PASSWORD || ''
+    } : null;
+    
+    console.log(`Sending request to ${API_ENDPOINT}${apiAuth ? ' with authentication' : ''}:`, apiRequest);
     
     try {
       // Make the API request
+      // Build headers with optional authentication
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authentication if provided
+      if (apiAuth) {
+        // Basic auth header (Base64 encoded username:password)
+        const credentials = Buffer.from(`${apiAuth.username}:${apiAuth.password}`).toString('base64');
+        headers['Authorization'] = `Basic ${credentials}`;
+      }
+      
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(apiRequest),
       });
       
