@@ -3,22 +3,18 @@
 import neo4j from 'neo4j-driver';
 import { generateSampleData } from "./sampleData";
 
-// Get Neo4j credentials from environment variables if available, otherwise use defaults
-// Using NEXT_PUBLIC_ prefixed variables which are accessible in client components
-const NEO4J_URI = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_URI ? process.env.NEXT_PUBLIC_NEO4J_URI : 'neo4j://localhost:7687';
-const NEO4J_USER = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_USER ? process.env.NEXT_PUBLIC_NEO4J_USER : 'neo4j';
-const NEO4J_PASSWORD = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_PASSWORD ? process.env.NEXT_PUBLIC_NEO4J_PASSWORD : 'neo4j';
+import { clientEnv } from "./utils";
+
+// Get Neo4j credentials from clientEnv utility that handles environment variables
+const NEO4J_URI = clientEnv.neo4j.uri;
+const NEO4J_USER = clientEnv.neo4j.user;
+const NEO4J_PASSWORD = clientEnv.neo4j.password;
 
 // For debugging
 console.log('Neo4j connection settings:', { 
   uri: NEO4J_URI, 
   user: NEO4J_USER, 
-  password: NEO4J_PASSWORD === 'neo4j' ? 'default_password' : '********',
-  env_vars_available: {
-    NEXT_PUBLIC_NEO4J_URI: !!process.env.NEXT_PUBLIC_NEO4J_URI,
-    NEXT_PUBLIC_NEO4J_USER: !!process.env.NEXT_PUBLIC_NEO4J_USER,
-    NEXT_PUBLIC_NEO4J_PASSWORD: !!process.env.NEXT_PUBLIC_NEO4J_PASSWORD
-  }
+  password: NEO4J_PASSWORD === 'neo4j' ? 'default_password' : '********'
 });
 
 // Connection management with rate limiting

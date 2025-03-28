@@ -11,12 +11,12 @@ export async function POST(request: Request) {
     const apiRequest = { question: body.query.trim() };
     
     // Use the known working endpoint with environment variables if available
-    const API_ENDPOINT = process.env.API_ENDPOINT || 'http://localhost:8010/query';
+    const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || process.env.API_ENDPOINT || 'http://localhost:8010/query';
     
     // Get API credentials from environment if available
-    const apiAuth = process.env.API_PASSWORD ? {
-      username: process.env.API_USERNAME || '',
-      password: process.env.API_PASSWORD || ''
+    const apiAuth = (process.env.NEXT_PUBLIC_API_PASSWORD || process.env.API_PASSWORD) ? {
+      username: process.env.NEXT_PUBLIC_API_USERNAME || process.env.API_USERNAME || '',
+      password: process.env.NEXT_PUBLIC_API_PASSWORD || process.env.API_PASSWORD || ''
     } : null;
     
     console.log(`Sending request to ${API_ENDPOINT}${apiAuth ? ' with authentication' : ''}:`, apiRequest);
