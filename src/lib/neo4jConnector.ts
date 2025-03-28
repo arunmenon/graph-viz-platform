@@ -122,35 +122,31 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
     label?: string;
   }>;
 } {
+  // Create maps to store unique nodes and links
   const nodes = new Map();
-  const links = new Map(); // Changed to Map for deduplication with proper keys
+  const links = new Map();
 
   // Enhanced color mapping for domain graph visualization
-  // Using a carefully designed palette for maximum distinguishability
   const colorMap: Record<string, string> = {
     // Database structure - Blue family
-    // Using different blues to show database hierarchy
     Table: '#1565C0',         // Strong blue - makes tables stand out as primary entities
     View: '#1E88E5',          // Medium blue - similar to tables but visually distinct
     Schema: '#0D47A1',        // Dark blue - container relationship
     Database: '#0277BD',      // Deep blue - highest level container
     
     // Table components - Purple family
-    // Related to tables but visually distinct
     Column: '#6A1B9A',        // Rich purple - strongly contrasts with blue tables
     PrimaryKey: '#8E24AA',    // Brighter purple - important column type  
     ForeignKey: '#9C27B0',    // Lighter purple - relationship indicator
     Index: '#AB47BC',         // Soft purple - auxiliary structure
     
     // Data types - Teal family
-    // Technical metadata gets cool teal tones
     DataType: '#00695C',      // Deep teal - technical classification
     Constraint: '#00897B',    // Medium teal
     Trigger: '#00ACC1',       // Light teal
     Function: '#26C6DA',      // Bright teal
     
     // Semantic concepts - Orange/Yellow family
-    // Warm colors for semantic/business concepts
     Concept: '#FF6F00',       // Deep orange - primary semantic concept
     Entity: '#F57C00',        // Orange - business entity
     Property: '#FF9800',      // Bright orange - entity property
@@ -158,14 +154,12 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
     Attribute: '#FFC107',     // Yellow - descriptive element
     
     // Relationships - Green family
-    // Connection types get green shades
     Relationship: '#2E7D32',  // Forest green - explicit relationships
     Association: '#388E3C',   // Medium green
     Mapping: '#43A047',       // Light green
     Inheritance: '#66BB6A',   // Pale green
     
     // Business domains - Red family  
-    // Business areas in warm reds
     Domain: '#C62828',        // Deep red - business domain
     Subject: '#D32F2F',       // Bright red
     Area: '#E53935',          // Light red
@@ -180,57 +174,35 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
     // Fallbacks
     Unknown: '#9E9E9E',       // Medium grey
     default: '#757575'        // Dark grey
-  }
   };
 
   try {
+    // Process each record from Neo4j
     records.forEach(record => {
-      // Debug the record structure
       console.log("Processing record:", record.keys);
       
       record.forEach((value, key) => {
-        console.log(`Processing record field: ${key}, type:`, typeof value, value ? value.constructor.name : 'null');
-        
-        // Skip null values but make sure we process node fields even if relationship is null
+        // Handle null values
         if (!value) {
-          console.log(`Skipping null/undefined value for key: ${key}`);
-          // Still continue if this is a node field (we'll want to process just the nodes for root-only view)
-          // Only return and skip if it's not the node
-          if (key !== 'n') {
-            return;
-          }
+          console.log(`Skipping null value for key: ${key}`);
+          if (key !== 'n') return; // Continue only for node fields
         }
         
+        // Process Neo4j nodes
         if (neo4j.isNode(value)) {
-          console.log("Found Node:", value.labels, value.properties);
           const node = value as neo4j.Node;
           const nodeId = node.identity.toString();
           const labels = node.labels;
           const properties = node.properties as Record<string, any>;
           
-          // Properly identify node type from labels and properties
+          // Determine node type
           let type = properties.type;
-          
-          // If type is not explicitly set, check labels
           if (!type && labels.length > 0) {
-            // Check for Category in labels array first
-            if (labels.includes('Category')) {
-              type = 'Category';
-            } else {
-              // Default to first label
-              type = labels[0];
-            }
+            type = labels.includes('Category') ? 'Category' : labels[0];
           }
           
-          // Always respect the Category label
-          if (labels.includes('Category')) {
-            type = 'Category';
-          }
-          
-          // Create a more human-readable label for the node
+          // Create node label
           let nodeLabel = '';
-          
-          // First try to get an explicit name property
           if (properties.name) {
             nodeLabel = String(properties.name).replace(/\|/g, '-');
           } else if (properties.title) {
@@ -238,9 +210,7 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
           } else if (properties.label) {
             nodeLabel = String(properties.label).replace(/\|/g, '-');
           } else if (properties.id && typeof properties.id === 'string') {
-            // Use ID if it's a string that looks like a name
             const idStr = properties.id.toString();
-            // Check if the ID is not just a number
             if (!/^\d+$/.test(idStr)) {
               nodeLabel = idStr
                 .replace(/_/g, ' ')
@@ -250,24 +220,20 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
             }
           }
           
-          // If we still don't have a good label, use the node type plus a short ID
-          if (!nodeLabel && labels.length > 0) {
-            const labelName = labels[0]
-              .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
-              .replace(/\|/g, '-')        // Replace pipe with dash
-              .trim();
-              
-            const shortId = nodeId.substring(0, 3);
-            nodeLabel = `${labelName} ${shortId}`;
-          } else if (!nodeLabel) {
-            // Last resort - just use Node plus ID
-            nodeLabel = `Node ${nodeId.substring(0, 3)}`;
+          // Fallback label
+          if (!nodeLabel) {
+            if (labels.length > 0) {
+              const labelName = labels[0]
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/\|/g, '-')
+                .trim();
+              nodeLabel = `${labelName} ${nodeId.substring(0, 3)}`;
+            } else {
+              nodeLabel = `Node ${nodeId.substring(0, 3)}`;
+            }
           }
           
-          // Final safety check to replace any remaining pipe characters
-          nodeLabel = nodeLabel.replace(/\|/g, '-');
-
-          // Create node if it doesn't exist
+          // Add node to collection
           if (!nodes.has(nodeId)) {
             nodes.set(nodeId, {
               id: nodeId,
@@ -278,11 +244,11 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
               properties: { ...properties },
             });
           }
-        } else if (neo4j.isRelationship(value)) {
-          console.log("Found Relationship:", value.type);
+        } 
+        // Process Neo4j relationships
+        else if (neo4j.isRelationship(value)) {
           const rel = value as neo4j.Relationship;
           try {
-            // Look for the source and target nodes in the record
             const sourceNode = record.get('n');
             const targetNode = record.get('m');
             
@@ -290,185 +256,96 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
               const startId = sourceNode.identity.toString();
               const endId = targetNode.identity.toString();
               
-              console.log("Creating link from record nodes:", { 
-                startId, 
-                endId, 
-                type: rel.type 
-              });
-              
-              // Create a unique key for this link that ignores direction to prevent duplicates
-              // Sort the IDs to ensure the same link doesn't appear twice regardless of direction
+              // Create unique key for relationship to avoid duplicates
               const [nodeA, nodeB] = [startId, endId].sort();
               const linkKey = `${nodeA}-${nodeB}-${rel.type || 'RELATED_TO'}`;
               
-              // Only add if we don't already have this link (regardless of direction)
               if (!links.has(linkKey)) {
-                // Sanitize relationship label to remove pipe characters
-                const relationshipLabel = (rel.type || 'RELATED_TO').replace(/\|/g, '-');
-                
                 links.set(linkKey, {
                   source: startId,
                   target: endId,
-                  label: relationshipLabel,
+                  label: (rel.type || 'RELATED_TO').replace(/\|/g, '-'),
                 });
               }
-            } else {
-              console.warn("Failed to create relationship - cannot find node identities in record");
             }
           } catch (e) {
             console.error("Error processing relationship:", e);
           }
-        } else if (neo4j.isPath(value)) {
-          console.log("Found Path with segments:", value.segments.length);
+        } 
+        // Process Neo4j paths
+        else if (neo4j.isPath(value)) {
           const path = value as neo4j.Path;
           
-          // Add all nodes from the path
           path.segments.forEach(segment => {
             try {
-              const startNode = segment.start;
-              const endNode = segment.end;
-              const relationship = segment.relationship;
+              if (!segment.start || !segment.end || !segment.relationship) return;
+              if (!segment.start.identity || !segment.end.identity) return;
               
-              if (!startNode || !endNode || !relationship) {
-                console.warn("Incomplete path segment:", segment);
-                return;
-              }
+              const startNodeId = segment.start.identity.toString();
+              const endNodeId = segment.end.identity.toString();
               
-              // Process start node with careful null checking
-              if (!startNode.identity) {
-                console.warn("Start node missing identity:", startNode);
-                return;
-              }
-              
-              const startNodeId = startNode.identity.toString();
-              const startNodeLabels = startNode.labels || [];
-              const startNodeProperties = (startNode.properties || {}) as Record<string, any>;
-              const startNodeType = (startNodeProperties.type || 
-                                (startNodeLabels.length > 0 ? startNodeLabels[0] : 'Unknown'));
-              
+              // Process start node
               if (!nodes.has(startNodeId)) {
+                const startProps = segment.start.properties as Record<string, any>;
+                const startType = startProps.type || 
+                  (segment.start.labels?.length ? segment.start.labels[0] : 'Unknown');
+                  
                 nodes.set(startNodeId, {
                   id: startNodeId,
-                  label: startNodeProperties.name || startNodeProperties.title || `Node ${startNodeId}`,
-                  type: startNodeType,
-                  color: colorMap[startNodeType] || colorMap.default,
-                  description: startNodeProperties.description || '',
-                  properties: { ...startNodeProperties },
+                  label: startProps.name || startProps.title || `Node ${startNodeId}`,
+                  type: startType,
+                  color: colorMap[startType] || colorMap.default,
+                  description: startProps.description || '',
+                  properties: { ...startProps },
                 });
               }
               
-              // Process end node with careful null checking
-              if (!endNode.identity) {
-                console.warn("End node missing identity:", endNode);
-                return;
-              }
-              
-              const endNodeId = endNode.identity.toString();
-              const endNodeLabels = endNode.labels || [];
-              const endNodeProperties = (endNode.properties || {}) as Record<string, any>;
-              const endNodeType = (endNodeProperties.type || 
-                                (endNodeLabels.length > 0 ? endNodeLabels[0] : 'Unknown'));
-              
-              // Create a more human-readable label for the end node
-              let endNodeLabel = '';
-              
-              // First try to get an explicit name property
-              if (endNodeProperties.name) {
-                endNodeLabel = String(endNodeProperties.name).replace(/\|/g, '-');
-              } else if (endNodeProperties.title) {
-                endNodeLabel = String(endNodeProperties.title).replace(/\|/g, '-');
-              } else if (endNodeProperties.label) {
-                endNodeLabel = String(endNodeProperties.label).replace(/\|/g, '-');
-              } else if (endNodeProperties.id && typeof endNodeProperties.id === 'string') {
-                // Use ID if it's a string that looks like a name
-                const idStr = endNodeProperties.id.toString();
-                // Check if the ID is not just a number
-                if (!/^\d+$/.test(idStr)) {
-                  endNodeLabel = idStr
-                    .replace(/_/g, ' ')
-                    .replace(/\|/g, '-')
-                    .replace(/([A-Z])/g, ' $1')
-                    .trim();
-                }
-              }
-              
-              // If we still don't have a good label, use the node type plus a short ID
-              if (!endNodeLabel && endNodeLabels.length > 0) {
-                const labelName = endNodeLabels[0]
-                  .replace(/([A-Z])/g, ' $1') // Add spaces before capital letters
-                  .replace(/\|/g, '-')        // Replace pipe with dash
-                  .trim();
-                  
-                const shortId = endNodeId.substring(0, 3);
-                endNodeLabel = `${labelName} ${shortId}`;
-              } else if (!endNodeLabel) {
-                // Last resort - just use Node plus ID
-                endNodeLabel = `Node ${endNodeId.substring(0, 3)}`;
-              }
-              
-              // Final safety check to replace any remaining pipe characters
-              endNodeLabel = endNodeLabel.replace(/\|/g, '-');
-              
+              // Process end node
               if (!nodes.has(endNodeId)) {
+                const endProps = segment.end.properties as Record<string, any>;
+                const endType = endProps.type || 
+                  (segment.end.labels?.length ? segment.end.labels[0] : 'Unknown');
+                  
                 nodes.set(endNodeId, {
                   id: endNodeId,
-                  label: endNodeLabel,
-                  type: endNodeType,
-                  color: colorMap[endNodeType] || colorMap.default,
-                  description: endNodeProperties.description || '',
-                  properties: { ...endNodeProperties },
+                  label: endProps.name || endProps.title || `Node ${endNodeId}`,
+                  type: endType,
+                  color: colorMap[endType] || colorMap.default,
+                  description: endProps.description || '',
+                  properties: { ...endProps },
                 });
               }
               
-              // Process relationship 
-              // Make sure we have valid node identities for both ends
-              if (startNodeId && endNodeId) {
-                console.log("Creating path segment link:", {
-                  from: startNodeId,
-                  to: endNodeId,
-                  type: relationship.type
+              // Process relationship between nodes
+              const [nodeA, nodeB] = [startNodeId, endNodeId].sort();
+              const linkKey = `${nodeA}-${nodeB}-${segment.relationship.type}`;
+              
+              if (!links.has(linkKey)) {
+                links.set(linkKey, {
+                  source: startNodeId,
+                  target: endNodeId,
+                  label: segment.relationship.type.replace(/\|/g, '-'),
                 });
-                
-                // Create a unique key for this link that ignores direction to prevent duplicates
-                // Sort the IDs to ensure the same link doesn't appear twice regardless of direction
-                const [nodeA, nodeB] = [startNodeId, endNodeId].sort();
-                const linkKey = `${nodeA}-${nodeB}-${relationship.type}`;
-                
-                // Only add if we don't already have this link (regardless of direction)
-                if (!links.has(linkKey)) {
-                  // Sanitize relationship label to remove pipe characters
-                  const relationshipLabel = relationship.type.replace(/\|/g, '-');
-                  
-                  links.set(linkKey, {
-                    source: startNodeId,
-                    target: endNodeId,
-                    label: relationshipLabel,
-                  });
-                }
-              } else {
-                console.warn("Skipping path segment - missing node IDs");
               }
             } catch (e) {
               console.error("Error processing path segment:", e);
             }
           });
-        } else {
-          // For non-graph types, just log what we received
-          console.log(`Unknown value type for key ${key}:`, value);
         }
       });
     });
+    
+    // Return the processed graph data
+    return {
+      nodes: Array.from(nodes.values()),
+      links: Array.from(links.values()),
+    };
+    
   } catch (error) {
     console.error("Error transforming Neo4j data:", error);
-    // Return empty data structure on error
+    // Return empty data on error
     return { nodes: [], links: [] };
   }
-  
-  // If we get here, return the processed data
-  return {
-    nodes: Array.from(nodes.values()),
-    links: Array.from(links.values()),
-  };
 }
 
 // Fetch the compliance taxonomy graph
