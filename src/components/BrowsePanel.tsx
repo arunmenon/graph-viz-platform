@@ -234,8 +234,8 @@ export function BrowsePanel() {
               Connection troubleshooting:
             </p>
             <ul className="list-disc pl-5 mt-1 text-xs">
-              <li>Make sure Neo4j is running at neo4j://localhost:7687</li>
-              <li>Verify the username (neo4j) and password (Rathum12!) are correct</li>
+              <li>Make sure Neo4j is running at {process.env.NEXT_PUBLIC_NEO4J_URI || 'neo4j://localhost:7687'}</li>
+              <li>Verify the credentials in your .env.local file are correct</li>
               <li>Check if Neo4j database is accessible from this environment</li>
             </ul>
           </div>

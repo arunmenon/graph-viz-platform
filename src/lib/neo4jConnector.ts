@@ -4,9 +4,10 @@ import neo4j from 'neo4j-driver';
 import { generateSampleData } from "./sampleData";
 
 // Get Neo4j credentials from environment variables if available, otherwise use defaults
-const NEO4J_URI = typeof process !== 'undefined' && process.env.NEO4J_URI ? process.env.NEO4J_URI : 'neo4j://localhost:7687';
-const NEO4J_USER = typeof process !== 'undefined' && process.env.NEO4J_USER ? process.env.NEO4J_USER : 'neo4j';
-const NEO4J_PASSWORD = typeof process !== 'undefined' && process.env.NEO4J_PASSWORD ? process.env.NEO4J_PASSWORD : 'neo4j';
+// Using NEXT_PUBLIC_ prefixed variables which are accessible in client components
+const NEO4J_URI = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_URI ? process.env.NEXT_PUBLIC_NEO4J_URI : 'neo4j://localhost:7687';
+const NEO4J_USER = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_USER ? process.env.NEXT_PUBLIC_NEO4J_USER : 'neo4j';
+const NEO4J_PASSWORD = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_NEO4J_PASSWORD ? process.env.NEXT_PUBLIC_NEO4J_PASSWORD : 'neo4j';
 
 // Try different Neo4j connection options, prioritizing environment variables
 const CONNECTION_OPTIONS = [
@@ -26,7 +27,16 @@ let USER = CONNECTION_OPTIONS[currentConnectionIndex].user;
 let PASSWORD = CONNECTION_OPTIONS[currentConnectionIndex].password;
 
 // For debugging
-console.log('Initial Neo4j connection settings:', { URI, USER, PASSWORD: '********' });
+console.log('Initial Neo4j connection settings:', { 
+  URI, 
+  USER, 
+  PASSWORD: '********', 
+  env_vars_available: {
+    NEXT_PUBLIC_NEO4J_URI: !!process.env.NEXT_PUBLIC_NEO4J_URI,
+    NEXT_PUBLIC_NEO4J_USER: !!process.env.NEXT_PUBLIC_NEO4J_USER,
+    NEXT_PUBLIC_NEO4J_PASSWORD: !!process.env.NEXT_PUBLIC_NEO4J_PASSWORD
+  }
+});
 
 // Initialize the driver
 let driver: neo4j.Driver | null = null;
