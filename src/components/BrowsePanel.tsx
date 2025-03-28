@@ -20,7 +20,12 @@ export function BrowsePanel() {
 
   const [noData, setNoData] = useState(false);
   
-  const handleLoadCompliance = async () => {
+  // Auto-load domain graph data when component mounts
+  useEffect(() => {
+    handleLoadDomainGraph();
+  }, []);
+  
+  const handleLoadDomainGraph = async () => {
     setIsLoading(true);
     setError(null);
     setNoData(false);
@@ -167,7 +172,7 @@ export function BrowsePanel() {
         <div className="flex gap-2">
           <Button 
             className="flex-1"
-            onClick={handleLoadCompliance}
+            onClick={handleLoadDomainGraph}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -177,8 +182,8 @@ export function BrowsePanel() {
               </>
             ) : (
               <>
-                <Database className="mr-2 h-4 w-4" />
-                Load Domain Graph
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh Domain Graph
               </>
             )}
           </Button>
@@ -262,11 +267,33 @@ CREATE (col)-[:MAPS_TO]->(concept)`}
         
         <div className="border rounded-md p-3 bg-muted/30">
           <h3 className="font-medium mb-2">About the Domain Graph</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-3">
             The Domain Graph is a knowledge graph connecting BigQuery schemas (tables/columns) to semantic concepts.
             You can explore connections between your data structures and domain concepts to better understand
             the semantic meaning of your data elements.
           </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-[#1565C0]"></div>
+              <span className="text-xs">Tables</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-[#6A1B9A]"></div>
+              <span className="text-xs">Columns</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-[#9C27B0]"></div>
+              <span className="text-xs">Foreign Keys</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-[#FF6F00]"></div>
+              <span className="text-xs">Concepts</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-[#00695C]"></div>
+              <span className="text-xs">Data Types</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -125,43 +125,62 @@ export function transformNeo4jToGraph(records: neo4j.Record[]): {
   const nodes = new Map();
   const links = new Map(); // Changed to Map for deduplication with proper keys
 
-  // Color mapping for different node types - using highly distinct colors
+  // Enhanced color mapping for domain graph visualization
+  // Using a carefully designed palette for maximum distinguishability
   const colorMap: Record<string, string> = {
-    // Main categories - blue family for root nodes
-    Category: '#0047AB',       // Cobalt Blue - for root categories (very distinct)
-    'Root Category': '#0047AB', // Same cobalt blue
-    Root: '#0047AB',          // Same cobalt blue
+    // Database structure - Blue family
+    // Using different blues to show database hierarchy
+    Table: '#1565C0',         // Strong blue - makes tables stand out as primary entities
+    View: '#1E88E5',          // Medium blue - similar to tables but visually distinct
+    Schema: '#0D47A1',        // Dark blue - container relationship
+    Database: '#0277BD',      // Deep blue - highest level container
     
-    // Subcategories - completely different color family (red/orange)
-    Subcategory: '#D32F2F',    // Bright red (very different from blue)
-    'Sub Category': '#D32F2F', // Same bright red
+    // Table components - Purple family
+    // Related to tables but visually distinct
+    Column: '#6A1B9A',        // Rich purple - strongly contrasts with blue tables
+    PrimaryKey: '#8E24AA',    // Brighter purple - important column type  
+    ForeignKey: '#9C27B0',    // Lighter purple - relationship indicator
+    Index: '#AB47BC',         // Soft purple - auxiliary structure
     
-    // Regulatory items - green family
-    Regulation: '#388E3C',     // Dark green
-    Standard: '#66BB6A',       // Medium green
-    Requirement: '#A5D6A7',    // Light green
+    // Data types - Teal family
+    // Technical metadata gets cool teal tones
+    DataType: '#00695C',      // Deep teal - technical classification
+    Constraint: '#00897B',    // Medium teal
+    Trigger: '#00ACC1',       // Light teal
+    Function: '#26C6DA',      // Bright teal
     
-    // Organizational items - purple family
-    Organization: '#7B1FA2',   // Dark purple
-    Department: '#9C27B0',     // Medium purple
-    Team: '#BA68C8',           // Light purple
+    // Semantic concepts - Orange/Yellow family
+    // Warm colors for semantic/business concepts
+    Concept: '#FF6F00',       // Deep orange - primary semantic concept
+    Entity: '#F57C00',        // Orange - business entity
+    Property: '#FF9800',      // Bright orange - entity property
+    Class: '#FFB300',         // Amber - classification
+    Attribute: '#FFC107',     // Yellow - descriptive element
     
-    // Legal items - brown/sepia family
-    'Legal Case': '#5D4037',   // Dark brown
-    Legislation: '#795548',    // Medium brown
-    Act: '#8D6E63',            // Light brown
+    // Relationships - Green family
+    // Connection types get green shades
+    Relationship: '#2E7D32',  // Forest green - explicit relationships
+    Association: '#388E3C',   // Medium green
+    Mapping: '#43A047',       // Light green
+    Inheritance: '#66BB6A',   // Pale green
     
-    // Concept items - yellow/gold family
-    Concept: '#FFC107',        // Amber yellow
-    Entity: '#FFD54F',         // Light amber
-    Term: '#FFECB3',           // Very light amber
+    // Business domains - Red family  
+    // Business areas in warm reds
+    Domain: '#C62828',        // Deep red - business domain
+    Subject: '#D32F2F',       // Bright red
+    Area: '#E53935',          // Light red
+    Topic: '#EF5350',         // Pale red
     
-    // Compliance items - teal/cyan family
-    Compliance: '#00796B',     // Dark teal
-    Control: '#26A69A',        // Medium teal
+    // Special categories
+    Root: '#5D4037',          // Brown - root nodes
+    Metric: '#7B1FA2',        // Purple - metrics/KPIs
+    Glossary: '#00BCD4',      // Cyan - terminology
+    External: '#607D8B',      // Blue-grey - external references
     
-    // Default for unknown types
-    default: '#757575',        // Medium gray
+    // Fallbacks
+    Unknown: '#9E9E9E',       // Medium grey
+    default: '#757575'        // Dark grey
+  }
   };
 
   try {
@@ -548,23 +567,34 @@ export async function expandNode(nodeId: string) {
 
 export async function fetchComplianceGraph() {
   try {
-    // Find all top-level Category nodes without hardcoding specific categories
+    // Find all tables and their relationships in the domain graph
     const query = `
-      // Find any nodes with Category label or type
-      MATCH (category:Category)
+      // Find all Table nodes
+      MATCH (table)
+      WHERE table.type = 'Table' OR ANY(label IN labels(table) WHERE label = 'Table')
       
-      // Return ONLY Category nodes
-      RETURN category as n, null as r, null as m, null as path
+      // Return all tables
+      RETURN table as n, null as r, null as m, null as path
       
       UNION
       
-      // Or find nodes with type = 'Category'
-      MATCH (category)
-      WHERE category.type = 'Category'
+      // Find relationships between tables
+      MATCH (table1)-[rel]-(table2)
+      WHERE (table1.type = 'Table' OR ANY(label IN labels(table1) WHERE label = 'Table'))
+      AND (table2.type = 'Table' OR ANY(label IN labels(table2) WHERE label = 'Table'))
       
-      // Return ONLY Category nodes
-      RETURN category as n, null as r, null as m, null as path
-      LIMIT 20
+      // Return table relationships
+      RETURN table1 as n, rel as r, table2 as m, null as path
+      
+      UNION
+      
+      // Include immediate column relationships with tables
+      MATCH (table)-[rel]-(column)
+      WHERE (table.type = 'Table' OR ANY(label IN labels(table) WHERE label = 'Table'))
+      AND (column.type = 'Column' OR ANY(label IN labels(column) WHERE label = 'Column'))
+      
+      // Return table-column relationships
+      RETURN table as n, rel as r, column as m, null as path
     `;
     
     console.log("Executing Neo4j query:", query);
