@@ -3,12 +3,20 @@
 import neo4j from 'neo4j-driver';
 import { generateSampleData } from "./sampleData";
 
-// Try different Neo4j connection options
+// Get Neo4j credentials from environment variables if available, otherwise use defaults
+const NEO4J_URI = typeof process !== 'undefined' && process.env.NEO4J_URI ? process.env.NEO4J_URI : 'neo4j://localhost:7687';
+const NEO4J_USER = typeof process !== 'undefined' && process.env.NEO4J_USER ? process.env.NEO4J_USER : 'neo4j';
+const NEO4J_PASSWORD = typeof process !== 'undefined' && process.env.NEO4J_PASSWORD ? process.env.NEO4J_PASSWORD : 'neo4j';
+
+// Try different Neo4j connection options, prioritizing environment variables
 const CONNECTION_OPTIONS = [
-  { uri: 'neo4j://localhost:7687', user: 'neo4j', password: 'Rathum12!' },
-  { uri: 'bolt://localhost:7687', user: 'neo4j', password: 'Rathum12!' },
-  { uri: 'neo4j://127.0.0.1:7687', user: 'neo4j', password: 'Rathum12!' },
-  { uri: 'bolt://127.0.0.1:7687', user: 'neo4j', password: 'Rathum12!' }
+  // First try with env variables or defaults
+  { uri: NEO4J_URI, user: NEO4J_USER, password: NEO4J_PASSWORD },
+  
+  // Then try alternate connection methods if needed
+  { uri: NEO4J_URI.replace('neo4j://', 'bolt://'), user: NEO4J_USER, password: NEO4J_PASSWORD },
+  { uri: NEO4J_URI.replace('localhost', '127.0.0.1'), user: NEO4J_USER, password: NEO4J_PASSWORD },
+  { uri: NEO4J_URI.replace('neo4j://localhost', 'bolt://127.0.0.1'), user: NEO4J_USER, password: NEO4J_PASSWORD }
 ];
 
 // Default connection to start with

@@ -142,27 +142,40 @@ Allows users to enter natural language queries to explore the graph.
 
 ## Setup and Configuration
 
-### API Connection
+### Database Connections
 
-The platform connects to a Graph RAG API with these settings (configurable in `.env.local`):
+The platform can connect to both Neo4j and a Graph RAG API. Configure both in your `.env.local` file:
+
+#### Neo4j Connection
+
+For the domain graph exploration features, the platform connects to Neo4j with these settings:
+
+```
+NEO4J_URI=neo4j://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_neo4j_password
+```
+
+#### Graph RAG API (Optional)
+
+For natural language querying capabilities, the platform can connect to a Graph RAG API:
 
 ```
 API_ENDPOINT=http://localhost:8010/query
-API_USERNAME=your_username
-API_PASSWORD=your_secure_password
 ```
-
-To set up authentication, create a `.env.local` file in the project root with the above variables.
 
 ### Environment Variables
 
 Create a `.env.local` file in the project root with:
 
 ```
-# API Configuration
+# Neo4j Configuration
+NEO4J_URI=neo4j://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_neo4j_password
+
+# API Configuration (Optional)
 API_ENDPOINT=http://localhost:8010/query
-API_USERNAME=admin
-API_PASSWORD=your_secure_password
 ```
 
 The `.env.local` file is git-ignored to keep credentials secure.
